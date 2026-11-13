@@ -6,6 +6,7 @@ import { getThreadCountForAccount, deleteAllThreadsForAccount } from "../db/thre
 import { deleteAllMessagesForAccount } from "../db/messages";
 import { imapInitialSync, imapDeltaSync } from "../imap/imapSync";
 import { clearAllFolderSyncStates } from "../db/folderSyncState";
+import { graphInitialSync, graphDeltaSync, clearGraphSyncState } from "../graph/graphSync";
 import { ensureFreshToken } from "../oauth/oauthTokenManager";
 import { hasCalendarSupport, getCalendarProvider } from "../calendar/providerFactory";
 import { getVisibleCalendars, upsertCalendar, updateCalendarSyncToken } from "../db/calendars";
@@ -132,6 +133,41 @@ async function syncImapAccount(accountId: string): Promise<void> {
 }
 
 /**
+ * Run a sync for a single Microsoft 365 (Graph) account (initial or delta).
+ */
+async function syncGraphAccount(accountId: string): Promise<void> {
+  const account = await getAccount(accountId);
+
+  if (!account) {
+    throw new Error("Account not found");
+  }
+
+  const syncPeriodStr = await getSetting("sync_period_days");
+  const syncDays = parseInt(syncPeriodStr ?? "365", 10) || 365;
+
+  const runInitial = () =>
+    graphInitialSync(accountId, syncDays, (progress) => {
+      statusCallback?.(accountId, "syncing", progress);
+    });
+
+  if (account.history_id) {
+    await graphDeltaSync(accountId, syncDays);
+
+    // Recovery: an interrupted first sync can leave the account marked as
+    // synced with nothing stored — start over in that case.
+    const threadCount = await getThreadCountForAccount(accountId);
+    if (threadCount === 0) {
+      console.warn(`[syncManager] Graph account ${accountId} has no threads after delta sync — forcing full re-sync`);
+      await clearAccountHistoryId(accountId);
+      await clearGraphSyncState(accountId);
+      await runInitial();
+    }
+  } else {
+    await runInitial();
+  }
+}
+
+/**
  * Sync calendars for a single account via the CalendarProvider abstraction.
  * Discovers calendars, syncs events for each visible calendar, stores results in DB.
  */
@@ -230,6 +266,8 @@ async function syncAccountInternal(accountId: string): Promise<void> {
 
     if (account.provider === "imap") {
       await syncImapAccount(accountId);
+    } else if (account.provider === "graph") {
+      await syncGraphAccount(accountId);
     } else {
       await syncGmailAccount(accountId);
     }
@@ -345,5 +383,6 @@ export async function resyncAccount(accountId: string): Promise<void> {
   await deleteAllMessagesForAccount(accountId);
   await clearAccountHistoryId(accountId);
   await clearAllFolderSyncStates(accountId);
+  await clearGraphSyncState(accountId);
   await runSync([accountId]);
 }

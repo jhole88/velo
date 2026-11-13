@@ -12,8 +12,22 @@ vi.mock("@/services/gmail/tokenManager", () => ({
   getGmailClient: vi.fn(),
 }));
 
+vi.mock("@/services/db/accounts", () => ({
+  getAccount: vi.fn(async () => ({ provider: "gmail_api" })),
+}));
+
+const mockGraphProvider = {
+  createFolder: vi.fn(),
+  renameFolder: vi.fn(),
+  deleteFolder: vi.fn(),
+};
+vi.mock("@/services/email/providerFactory", () => ({
+  getEmailProvider: vi.fn(async () => mockGraphProvider),
+}));
+
 import { getLabelsForAccount, deleteLabel as dbDeleteLabel, updateLabelSortOrder, upsertLabel } from "@/services/db/labels";
 import { getGmailClient } from "@/services/gmail/tokenManager";
+import { getAccount } from "@/services/db/accounts";
 
 const mockGetLabels = vi.mocked(getLabelsForAccount);
 const mockDbDeleteLabel = vi.mocked(dbDeleteLabel);
@@ -26,6 +40,7 @@ describe("labelStore", () => {
   beforeEach(() => {
     useLabelStore.setState({ labels: [], isLoading: false });
     vi.clearAllMocks();
+    vi.mocked(getAccount).mockResolvedValue({ provider: "gmail_api" } as never);
   });
 
   it("should have correct default state", () => {
@@ -195,5 +210,46 @@ describe("isSystemLabel", () => {
     expect(isSystemLabel("Label_1")).toBe(false);
     expect(isSystemLabel("Label_2")).toBe(false);
     expect(isSystemLabel("Work")).toBe(false);
+  });
+  describe("Microsoft 365 accounts", () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      vi.mocked(getAccount).mockResolvedValue({ provider: "graph" } as never);
+      mockGetLabels.mockResolvedValue([]);
+    });
+
+    it("creates a mail folder instead of a Gmail label", async () => {
+      mockGraphProvider.createFolder.mockResolvedValue({ id: "graph-folder:f-new", name: "Closeout" });
+
+      await useLabelStore.getState().createLabel("acc-graph", "Closeout");
+
+      expect(mockGraphProvider.createFolder).toHaveBeenCalledWith("Closeout");
+      expect(mockUpsertLabel).toHaveBeenCalledWith({
+        id: "graph-folder:f-new",
+        accountId: "acc-graph",
+        name: "Closeout",
+        type: "user",
+        imapFolderPath: "f-new",
+      });
+      expect(mockGetGmailClient).not.toHaveBeenCalled();
+    });
+
+    it("renames a folder", async () => {
+      await useLabelStore.getState().updateLabel("acc-graph", "graph-folder:f-jobs", { name: "Projects" });
+      expect(mockGraphProvider.renameFolder).toHaveBeenCalledWith("graph-folder:f-jobs", "Projects");
+    });
+
+    it("deletes a folder", async () => {
+      await useLabelStore.getState().deleteLabel("acc-graph", "graph-folder:f-jobs");
+      expect(mockGraphProvider.deleteFolder).toHaveBeenCalledWith("graph-folder:f-jobs");
+      expect(mockDbDeleteLabel).toHaveBeenCalledWith("acc-graph", "graph-folder:f-jobs");
+    });
+
+    it("refuses to delete an Outlook category", async () => {
+      await expect(
+        useLabelStore.getState().deleteLabel("acc-graph", "graph-cat:Blue category"),
+      ).rejects.toThrow(/manage them in Outlook/);
+      expect(mockGraphProvider.deleteFolder).not.toHaveBeenCalled();
+    });
   });
 });

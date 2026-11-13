@@ -38,7 +38,7 @@ Velo follows a **three-layer architecture** with clear separation of concerns.
 
 ## Data Flow
 
-1. **Sync** -- Background sync every 60s. Gmail accounts use Gmail History API (delta sync, falls back to full sync if history expires ~30 days). IMAP accounts use UIDVALIDITY/last_uid tracking for efficient delta sync.
+1. **Sync** -- Background sync every 60s. Gmail accounts use Gmail History API (delta sync, falls back to full sync if history expires ~30 days). IMAP accounts use UIDVALIDITY/last_uid tracking for efficient delta sync. Microsoft 365 accounts use Microsoft Graph per-folder delta queries and re-download the conversations that changed.
 2. **Storage** -- All messages, threads, labels, contacts, calendar events, and AI results stored in local SQLite (34 tables) with FTS5 full-text indexing.
 3. **State** -- Eight Zustand stores manage UI state. No middleware, no persistence needed -- ephemeral state rebuilds from SQLite on startup.
 4. **Rendering** -- Email HTML is sanitized with DOMPurify and rendered in sandboxed iframes. Remote images blocked by default.

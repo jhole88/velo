@@ -1,4 +1,4 @@
-export type CalendarProviderType = "google_api" | "caldav";
+export type CalendarProviderType = "google_api" | "caldav" | "microsoft_graph";
 
 export interface CalendarInfo {
   remoteId: string;

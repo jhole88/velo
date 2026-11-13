@@ -1,6 +1,9 @@
 import type { EmailProvider } from "./types";
 import { GmailApiProvider } from "./gmailProvider";
 import { ImapSmtpProvider } from "./imapSmtpProvider";
+import { GraphProvider } from "./graphProvider";
+import { getGraphClient, removeGraphClient } from "../graph/graphClient";
+import { clearGraphTokenCache } from "../graph/graphAuth";
 import { getAccount } from "../db/accounts";
 import { getGmailClient } from "../gmail/tokenManager";
 
@@ -23,6 +26,8 @@ export async function getEmailProvider(
 
   if (account.provider === "imap") {
     provider = new ImapSmtpProvider(accountId);
+  } else if (account.provider === "graph") {
+    provider = new GraphProvider(accountId, getGraphClient(accountId));
   } else {
     // Default: gmail_api
     const client = await getGmailClient(accountId);
@@ -38,6 +43,8 @@ export async function getEmailProvider(
  */
 export function removeProvider(accountId: string): void {
   providers.delete(accountId);
+  removeGraphClient(accountId);
+  clearGraphTokenCache(accountId);
 }
 
 /**

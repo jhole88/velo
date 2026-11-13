@@ -6,6 +6,7 @@ import {
 } from "./providerFactory";
 import { GmailApiProvider } from "./gmailProvider";
 import { ImapSmtpProvider } from "./imapSmtpProvider";
+import { GraphProvider } from "./graphProvider";
 import { getAccount } from "../db/accounts";
 import { getGmailClient } from "../gmail/tokenManager";
 
@@ -287,5 +288,14 @@ describe("providerFactory", () => {
 
     // Should not throw — Gmail providers don't have clearConfigCache
     invalidateProviderConfig("acc-7");
+  });
+  it("returns GraphProvider for Microsoft 365 accounts without touching the Gmail client", async () => {
+    vi.mocked(getAccount).mockResolvedValue({ id: "acc-graph", provider: "graph" } as never);
+
+    const provider = await getEmailProvider("acc-graph");
+
+    expect(provider).toBeInstanceOf(GraphProvider);
+    expect(provider.type).toBe("graph");
+    expect(getGmailClient).not.toHaveBeenCalled();
   });
 });

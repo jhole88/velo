@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getOAuthProvider, getAllOAuthProviders } from "./providers";
+import { getOAuthProvider, getAllOAuthProviders, getMicrosoftGraphProvider, isMicrosoftProvider } from "./providers";
 
 describe("getOAuthProvider", () => {
   it("returns microsoft provider config", () => {
@@ -46,5 +46,47 @@ describe("getAllOAuthProviders", () => {
     const ids = providers.map((p) => p.id);
     expect(ids).toContain("microsoft");
     expect(ids).toContain("yahoo");
+  });
+});
+
+describe("getMicrosoftGraphProvider", () => {
+  it("builds the authority from the tenant", () => {
+    const provider = getMicrosoftGraphProvider("11111111-2222-3333-4444-555555555555");
+    expect(provider.id).toBe("microsoft_graph");
+    expect(provider.authUrl).toBe(
+      "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize",
+    );
+    expect(provider.tokenUrl).toBe(
+      "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/token",
+    );
+    expect(provider.usePkce).toBe(true);
+  });
+
+  it("defaults to any work or school tenant", () => {
+    expect(getMicrosoftGraphProvider().authUrl).toContain("/organizations/");
+    expect(getMicrosoftGraphProvider("  ").authUrl).toContain("/organizations/");
+  });
+
+  it("accepts a domain as the tenant", () => {
+    expect(getMicrosoftGraphProvider("contoso.com").tokenUrl).toContain("/contoso.com/");
+  });
+
+  it("rejects tenants that would change the URL", () => {
+    expect(() => getMicrosoftGraphProvider("evil.com/x?y=")).toThrow(/Invalid Microsoft tenant/);
+  });
+
+  it("requests mail, calendar and offline scopes", () => {
+    const { scopes } = getMicrosoftGraphProvider();
+    expect(scopes).toContain("https://graph.microsoft.com/Mail.ReadWrite");
+    expect(scopes).toContain("https://graph.microsoft.com/Mail.Send");
+    expect(scopes).toContain("https://graph.microsoft.com/Calendars.ReadWrite");
+    expect(scopes).toContain("offline_access");
+  });
+
+  it("is resolvable by ID and counted as Microsoft", () => {
+    expect(getOAuthProvider("microsoft_graph")?.id).toBe("microsoft_graph");
+    expect(isMicrosoftProvider("microsoft_graph")).toBe(true);
+    expect(isMicrosoftProvider("microsoft")).toBe(true);
+    expect(isMicrosoftProvider("yahoo")).toBe(false);
   });
 });

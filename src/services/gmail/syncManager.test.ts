@@ -26,6 +26,11 @@ vi.mock("../imap/imapSync", () => ({
   imapInitialSync: vi.fn(),
   imapDeltaSync: vi.fn(),
 }));
+vi.mock("../graph/graphSync", () => ({
+  graphInitialSync: vi.fn(),
+  graphDeltaSync: vi.fn(),
+  clearGraphSyncState: vi.fn(),
+}));
 vi.mock("../db/folderSyncState", () => ({
   clearAllFolderSyncStates: vi.fn(),
 }));
@@ -57,6 +62,8 @@ import {
 import { getAccount } from "../db/accounts";
 import { getGmailClient } from "./tokenManager";
 import { initialSync, deltaSync } from "./sync";
+import { graphInitialSync, graphDeltaSync, clearGraphSyncState } from "../graph/graphSync";
+import { getThreadCountForAccount } from "../db/threads";
 
 const mockGetAccount = vi.mocked(getAccount);
 const mockGetGmailClient = vi.mocked(getGmailClient);
@@ -161,6 +168,56 @@ describe("syncManager", () => {
 
       // Both accounts synced (a1 directly, a2 via queue drain)
       expect(mockDeltaSync).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("Microsoft 365 accounts", () => {
+    const graphAccount = (historyId: string | null) => ({
+      ...makeGmailAccount("g1", historyId),
+      provider: "graph" as const,
+    });
+
+    it("runs the Graph initial sync for a new account and never touches Gmail", async () => {
+      mockGetAccount.mockResolvedValue(graphAccount(null) as never);
+
+      await syncAccount("g1");
+
+      expect(graphInitialSync).toHaveBeenCalledWith("g1", 365, expect.any(Function));
+      expect(graphDeltaSync).not.toHaveBeenCalled();
+      expect(mockInitialSync).not.toHaveBeenCalled();
+      expect(mockGetGmailClient).not.toHaveBeenCalled();
+    });
+
+    it("runs the Graph delta sync once the account has synced", async () => {
+      mockGetAccount.mockResolvedValue(graphAccount("graph:1") as never);
+      vi.mocked(getThreadCountForAccount).mockResolvedValue(42);
+
+      await syncAccount("g1");
+
+      expect(graphDeltaSync).toHaveBeenCalledWith("g1", 365);
+      expect(graphInitialSync).not.toHaveBeenCalled();
+    });
+
+    it("starts over when a synced account has no threads stored", async () => {
+      mockGetAccount.mockResolvedValue(graphAccount("graph:1") as never);
+      vi.mocked(getThreadCountForAccount).mockResolvedValue(0);
+
+      await syncAccount("g1");
+
+      expect(clearGraphSyncState).toHaveBeenCalledWith("g1");
+      expect(graphInitialSync).toHaveBeenCalledTimes(1);
+    });
+
+    it("reports a failed sync as an error status", async () => {
+      mockGetAccount.mockResolvedValue(graphAccount(null) as never);
+      vi.mocked(graphInitialSync).mockRejectedValueOnce(new Error("Graph down"));
+      const statuses: [string, string | undefined][] = [];
+      const unsubscribe = onSyncStatus((_id, status, _progress, error) => statuses.push([status, error]));
+
+      await syncAccount("g1");
+      unsubscribe();
+
+      expect(statuses.at(-1)).toEqual(["error", "Graph down"]);
     });
   });
 

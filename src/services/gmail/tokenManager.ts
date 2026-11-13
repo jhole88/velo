@@ -23,6 +23,10 @@ export async function getGmailClient(
   const account = accounts.find((a) => a.id === accountId);
 
   if (!account) throw new Error(`Account ${accountId} not found`);
+  if (account.provider === "graph") {
+    // Microsoft 365 tokens must never be sent to Google
+    throw new Error(`Account ${accountId} is a Microsoft 365 account, not a Gmail account`);
+  }
   if (!account.access_token || !account.refresh_token) {
     throw new Error(`Account ${accountId} has no tokens`);
   }
@@ -73,6 +77,7 @@ export async function initializeClients(): Promise<void> {
   const clientSecret = (await getSecureSetting("google_client_secret")) ?? undefined;
 
   for (const account of accounts) {
+    if (account.provider === "graph") continue; // Microsoft 365 accounts use the Graph client
     if (account.is_active && account.access_token && account.refresh_token) {
       const client = new GmailClient(account.id, clientId, {
         accessToken: account.access_token,

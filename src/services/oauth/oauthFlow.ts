@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { OAuthProviderConfig } from "./providers";
+import { isMicrosoftProvider, MICROSOFT_GRAPH_PROVIDER_ID, type OAuthProviderConfig } from "./providers";
 
 const OAUTH_CALLBACK_PORT = 17248;
 
@@ -87,6 +87,11 @@ export async function startProviderOAuthFlow(
   if (provider.id === "microsoft") {
     params.prompt = "consent";
     params.response_mode = "query";
+  } else if (provider.id === MICROSOFT_GRAPH_PROVIDER_ID) {
+    // Work accounts: an admin usually grants consent tenant-wide, and forcing
+    // the consent prompt would fail for users who can't consent themselves.
+    params.prompt = "select_account";
+    params.response_mode = "query";
   }
 
   const authUrl = `${provider.authUrl}?${new URLSearchParams(params).toString()}`;
@@ -135,7 +140,7 @@ async function exchangeCode(
     redirectUri,
     codeVerifier: provider.usePkce ? codeVerifier : null,
     clientSecret: clientSecret || null,
-    scope: provider.id === "microsoft" ? provider.scopes.join(" ") : null,
+    scope: isMicrosoftProvider(provider.id) ? provider.scopes.join(" ") : null,
   });
 }
 
@@ -154,7 +159,7 @@ export async function refreshProviderToken(
     refreshToken,
     clientId,
     clientSecret: clientSecret || null,
-    scope: provider.id === "microsoft" ? provider.scopes.join(" ") : null,
+    scope: isMicrosoftProvider(provider.id) ? provider.scopes.join(" ") : null,
   });
 }
 
@@ -170,7 +175,7 @@ async function fetchUserInfo(
   tokens: TokenResponse,
 ): Promise<ProviderUserInfo> {
   // Microsoft: extract user info from ID token (can't use Graph API with Outlook scopes)
-  if (provider.id === "microsoft") {
+  if (isMicrosoftProvider(provider.id)) {
     if (tokens.id_token) {
       const claims = parseIdToken(tokens.id_token);
       return {

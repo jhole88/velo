@@ -95,6 +95,15 @@ describe("providerFactory", () => {
       );
     });
 
+    it("returns GraphCalendarProvider for Microsoft 365 accounts", async () => {
+      const account = createMockImapAccount({ id: "acc-graph", provider: "graph" as DbAccount["provider"] });
+      mockGetAccount.mockResolvedValue(account);
+
+      const provider = await getCalendarProvider(account.id);
+
+      expect(provider.type).toBe("microsoft_graph");
+    });
+
     it("throws error when account is not found", async () => {
       mockGetAccount.mockResolvedValue(null);
 
@@ -180,6 +189,13 @@ describe("providerFactory", () => {
         calendar_provider: "caldav",
         caldav_url: "https://caldav.example.com/dav",
       });
+      mockGetAccount.mockResolvedValue(account);
+
+      expect(await hasCalendarSupport(account.id)).toBe(true);
+    });
+
+    it("returns true for Microsoft 365 accounts", async () => {
+      const account = createMockImapAccount({ provider: "graph" as DbAccount["provider"] });
       mockGetAccount.mockResolvedValue(account);
 
       expect(await hasCalendarSupport(account.id)).toBe(true);

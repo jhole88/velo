@@ -199,6 +199,22 @@ export const HELP_CATEGORIES: HelpCategory[] = [
         ],
         relatedSettingsTab: "accounts",
       },
+      {
+        id: "microsoft-365-setup",
+        icon: Server,
+        title: "Microsoft 365 work account setup",
+        summary: "Connect an Exchange Online mailbox and Outlook calendar through Microsoft Graph.",
+        description:
+          "Work and school mailboxes connect through Microsoft Graph, so IMAP does not need to be enabled. An administrator of your Microsoft 365 tenant registers Velo once: (1) In the Microsoft Entra admin center go to App registrations → New registration. Name it (e.g. 'Velo Mail'), choose 'Accounts in this organizational directory only', and add a Redirect URI of type 'Public client/native (mobile & desktop)' with the value http://localhost:17248. (2) On the Overview page copy the Application (client) ID and the Directory (tenant) ID. (3) Under Authentication, set 'Allow public client flows' to Yes. (4) Under API permissions add these Microsoft Graph delegated permissions: Mail.ReadWrite, Mail.Send, Calendars.ReadWrite, MailboxSettings.Read, User.Read, offline_access, openid, profile, email — then click 'Grant admin consent'. (5) In Velo choose Add Account → Microsoft 365, paste both IDs, and sign in with your work account. Mail folders appear as labels, Outlook categories appear as coloured labels, and your Outlook calendar shows in the Calendar view.",
+        tips: [
+          { text: "No client secret is needed — sign-in uses PKCE." },
+          { text: "Permissions are delegated: Velo can only reach the mailbox of the person who signs in." },
+          { text: "The first sync downloads the last year of mail (configurable in Settings) and can take a while on large mailboxes." },
+          { text: "Starring a conversation flags its latest message, which also adds it to Microsoft To Do." },
+          { text: "Shared mailboxes and the company address list are not supported yet." },
+        ],
+        relatedSettingsTab: "accounts",
+      },
     ],
   },
   {

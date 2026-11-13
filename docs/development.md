@@ -81,6 +81,15 @@ Velo connects directly to Gmail via OAuth. You need your own Google Cloud creden
 
 > Velo uses PKCE flow -- no client secret is required.
 
+### Microsoft 365 (work or school)
+
+Connects Exchange Online mail and Outlook calendar through Microsoft Graph. A tenant administrator registers the app once in Microsoft Entra ID:
+
+1. **App registrations → New registration** — single tenant, Redirect URI type **Public client/native (mobile & desktop)** = `http://localhost:17248`
+2. **Authentication** → set **Allow public client flows** to **Yes**
+3. **API permissions** → Microsoft Graph **delegated**: `Mail.ReadWrite`, `Mail.Send`, `Calendars.ReadWrite`, `MailboxSettings.Read`, `User.Read`, `offline_access`, `openid`, `profile`, `email` → **Grant admin consent**
+4. In Velo: account switcher → **Add Account** → **Microsoft 365**, paste the Application (client) ID and Directory (tenant) ID, and sign in
+
 ### IMAP/SMTP
 
 For non-Gmail providers (Outlook, Yahoo, iCloud, Fastmail, etc.):

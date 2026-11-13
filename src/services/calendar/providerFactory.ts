@@ -1,6 +1,7 @@
 import type { CalendarProvider } from "./types";
 import { GoogleCalendarProvider } from "./googleCalendarProvider";
 import { CalDAVProvider } from "./caldavProvider";
+import { GraphCalendarProvider } from "./graphCalendarProvider";
 import { getAccount } from "@/services/db/accounts";
 
 const providerCache = new Map<string, CalendarProvider>();
@@ -21,6 +22,10 @@ export async function getCalendarProvider(accountId: string): Promise<CalendarPr
   // Standalone CalDAV account
   if (account.provider === "caldav") {
     provider = new CalDAVProvider(accountId);
+  }
+  // Microsoft 365 account — Outlook calendar comes through the same Graph sign-in
+  else if (account.provider === "graph") {
+    provider = new GraphCalendarProvider(accountId);
   }
   // IMAP account with CalDAV configured
   else if (account.calendar_provider === "caldav" && account.caldav_url) {
@@ -50,6 +55,7 @@ export async function hasCalendarSupport(accountId: string): Promise<boolean> {
 
   if (account.provider === "caldav") return true;
   if (account.provider === "gmail_api") return true;
+  if (account.provider === "graph") return true;
   if (account.calendar_provider === "caldav" && account.caldav_url) return true;
   return false;
 }

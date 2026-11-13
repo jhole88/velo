@@ -34,6 +34,7 @@ export interface DbAccount {
   caldav_home_url: string | null;
   calendar_provider: string | null;
   accept_invalid_certs: number;
+  oauth_tenant?: string | null;
 }
 
 async function decryptAccountTokens(account: DbAccount): Promise<DbAccount> {
@@ -325,6 +326,39 @@ export async function insertOAuthImapAccount(account: {
       encClientSecret,
       account.imapUsername || null,
       account.acceptInvalidCerts ? 1 : 0,
+    ],
+  );
+}
+
+/**
+ * Insert a Microsoft 365 account that talks to Exchange Online through
+ * Microsoft Graph (no IMAP/SMTP settings involved).
+ */
+export async function insertGraphAccount(account: {
+  id: string;
+  email: string;
+  displayName: string | null;
+  accessToken: string;
+  refreshToken: string;
+  tokenExpiresAt: number;
+  oauthClientId: string;
+  oauthTenant: string | null;
+}): Promise<void> {
+  const db = await getDb();
+  const encAccessToken = await encryptValue(account.accessToken);
+  const encRefreshToken = await encryptValue(account.refreshToken);
+  await db.execute(
+    `INSERT INTO accounts (id, email, display_name, avatar_url, access_token, refresh_token, token_expires_at, provider, auth_method, oauth_provider, oauth_client_id, oauth_tenant, calendar_provider)
+     VALUES ($1, $2, $3, NULL, $4, $5, $6, 'graph', 'oauth2', 'microsoft_graph', $7, $8, 'microsoft_graph')`,
+    [
+      account.id,
+      account.email,
+      account.displayName,
+      encAccessToken,
+      encRefreshToken,
+      account.tokenExpiresAt,
+      account.oauthClientId,
+      account.oauthTenant,
     ],
   );
 }

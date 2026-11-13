@@ -854,7 +854,7 @@ export function SettingsPage() {
                     ) : (
                       <div className="space-y-2">
                         {accounts.filter((a) => a.provider !== "caldav").map((account) => {
-                          const providerLabel = account.provider === "imap" ? "IMAP" : "Gmail";
+                          const providerLabel = account.provider === "imap" ? "IMAP" : account.provider === "graph" ? "Microsoft 365" : "Gmail";
                           return (
                             <div
                               key={account.id}

@@ -2,6 +2,22 @@ import { create } from "zustand";
 import { getLabelsForAccount, deleteLabel as dbDeleteLabel, updateLabelSortOrder } from "@/services/db/labels";
 import { upsertLabel } from "@/services/db/labels";
 import { getGmailClient } from "@/services/gmail/tokenManager";
+import { getAccount } from "@/services/db/accounts";
+
+/**
+ * Microsoft 365 accounts have folders rather than labels, so label management
+ * maps onto mail folders there. Outlook categories are managed in Outlook.
+ */
+async function isGraphAccount(accountId: string): Promise<boolean> {
+  const account = await getAccount(accountId);
+  return account?.provider === "graph";
+}
+
+function assertGraphFolderLabel(labelId: string): void {
+  if (!labelId.startsWith("graph-folder:")) {
+    throw new Error("Outlook categories and built-in folders can't be changed from here — manage them in Outlook.");
+  }
+}
 
 export interface Label {
   id: string;
@@ -73,6 +89,20 @@ export const useLabelStore = create<LabelState>((set, get) => ({
   clearLabels: () => set({ labels: [], isLoading: false }),
 
   createLabel: async (accountId: string, name: string, color?: { textColor: string; backgroundColor: string }) => {
+    if (await isGraphAccount(accountId)) {
+      const { getEmailProvider } = await import("@/services/email/providerFactory");
+      const provider = await getEmailProvider(accountId);
+      const folder = await provider.createFolder(name);
+      await upsertLabel({
+        id: folder.id,
+        accountId,
+        name: folder.name,
+        type: "user",
+        imapFolderPath: folder.id.replace(/^graph-folder:/, ""),
+      });
+      await get().loadLabels(accountId);
+      return;
+    }
     const client = await getGmailClient(accountId);
     const gmailLabel = await client.createLabel(name, color);
     await upsertLabel({
@@ -87,6 +117,17 @@ export const useLabelStore = create<LabelState>((set, get) => ({
   },
 
   updateLabel: async (accountId: string, labelId: string, updates: { name?: string; color?: { textColor: string; backgroundColor: string } | null }) => {
+    if (await isGraphAccount(accountId)) {
+      assertGraphFolderLabel(labelId);
+      if (updates.name) {
+        const { getEmailProvider } = await import("@/services/email/providerFactory");
+        const provider = await getEmailProvider(accountId);
+        await provider.renameFolder(labelId, updates.name);
+        await upsertLabel({ id: labelId, accountId, name: updates.name, type: "user" });
+      }
+      await get().loadLabels(accountId);
+      return;
+    }
     const client = await getGmailClient(accountId);
     const gmailLabel = await client.updateLabel(labelId, updates);
     await upsertLabel({
@@ -101,6 +142,16 @@ export const useLabelStore = create<LabelState>((set, get) => ({
   },
 
   deleteLabel: async (accountId: string, labelId: string) => {
+    if (await isGraphAccount(accountId)) {
+      assertGraphFolderLabel(labelId);
+      const { getEmailProvider } = await import("@/services/email/providerFactory");
+      const provider = await getEmailProvider(accountId);
+      // Exchange moves the folder and its mail to Deleted Items
+      await provider.deleteFolder(labelId);
+      await dbDeleteLabel(accountId, labelId);
+      await get().loadLabels(accountId);
+      return;
+    }
     const client = await getGmailClient(accountId);
     await client.deleteLabel(labelId);
     await dbDeleteLabel(accountId, labelId);
